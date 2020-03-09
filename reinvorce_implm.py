@@ -9,6 +9,8 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 
 # Constants
+from REINFORCE_implementation import update_policy
+
 GAMMA = 0.9
 
 

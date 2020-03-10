@@ -2,8 +2,25 @@ from IMPORTS import *
 # env = gym.make('procgen:procgen-starpilot-v0')
 # env = gym.make('MountainCarContinuous-v0')
 # env = gym.make('Tutankham-ram-v0')
+
+env = gym.make('procgen:procgen-starpilot-v0')
+print(env.action_space)
+#> Discrete(2)
+print(env.observation_space)
+env.reset()
+for _ in range(100):
+    env.render()
+    env.step(env.action_space.sample()) # take a random action
+env.close()
+
+plt.plot([1,2,3], [5,6,7])
+plt.show()
+
+# env = gym.make('procgen:procgen-starpilot-v0')
+# env = gym.make('MountainCarContinuous-v0')
+# env = gym.make('Tutankham-ram-v0')
 # help(gym)
-env = gym.make('CartPole-v0')
+env = gym.make('procgen:procgen-starpilot-v0')
 GAMMA = 0.9
 
 
@@ -32,3 +49,13 @@ space = spaces.Discrete(8) # Set with 8 elements {0, 1, 2, ..., 7}
 x = space.sample()
 assert space.contains(x)
 assert space.n == 8
+
+env = retro.make(game='Airstriker-Genesis')
+obs = env.reset()
+done = False
+while not done:
+    obs, rew, done, info = env.step(env.action_space.sample())
+    env.render()
+    if done:
+        obs = env.reset()
+env.close()

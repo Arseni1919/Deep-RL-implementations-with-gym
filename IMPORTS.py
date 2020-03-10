@@ -1,5 +1,7 @@
 import sys
 import gym
+from gym import envs
+import retro
 # import cv2
 import time
 from pprint import pprint
@@ -20,6 +22,10 @@ import torch.nn.functional as F
 # import torchvision.transforms as T
 from torch.autograd import Variable
 
+import random
+from tqdm import tqdm, trange
+import pandas as pd
+from torch.distributions import Categorical
 
 # print('bla')
 

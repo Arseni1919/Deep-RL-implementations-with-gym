@@ -5,4 +5,4 @@ env
 .pytest_cache
 .coverage
 .idea
-.ipynb_checkpoints
+.ipynb_checkpointsq

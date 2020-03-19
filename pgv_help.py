@@ -19,17 +19,17 @@ class Policy(nn.Module):
         action_probs = self.network(torch.FloatTensor(state))
         return action_probs
 
-    def forward(self, x):
-
-        model = torch.nn.Sequential(
-            self.l1,
-            nn.Dropout(p=0.6),
-            nn.ReLU(),
-            self.l2,
-            # nn.Softmax()
-            nn.Softmax(dim=-1)
-        )
-        return model(x)
+    # def forward(self, x):
+    #
+    #     model = torch.nn.Sequential(
+    #         self.l1,
+    #         nn.Dropout(p=0.6),
+    #         nn.ReLU(),
+    #         self.l2,
+    #         # nn.Softmax()
+    #         nn.Softmax(dim=-1)
+    #     )
+    #     return model(x)
 
 
 def select_action(state, policy):

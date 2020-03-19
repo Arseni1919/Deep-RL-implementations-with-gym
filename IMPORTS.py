@@ -11,7 +11,6 @@ import random
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-from collections import namedtuple
 from itertools import count
 # from PIL import Image
 
@@ -27,7 +26,11 @@ from tqdm import tqdm, trange
 import pandas as pd
 from torch.distributions import Categorical
 
+from collections import namedtuple, deque
+from copy import deepcopy, copy
 # print('bla')
+
+from skimage import transform
 
 
 

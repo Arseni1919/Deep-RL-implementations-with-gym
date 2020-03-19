@@ -1,10 +1,10 @@
 from IMPORTS import *
-from pgv_classes import *
+from pgv_help import *
 
 # --------------------- Hyperparameters --------------------- #
 learning_rate = 0.01
 gamma = 0.99
-episodes = 3000
+episodes = 1000
 env = gym.make('CartPole-v1')
 # env.seed(1)
 # torch.manual_seed(1)
@@ -30,18 +30,18 @@ if __name__ == '__main__':
     optimizer = optim.Adam(policy.network.parameters(), lr=learning_rate)
     action_space = np.arange(env.action_space.n)
     for episode in range(episodes):
-        observation = env.reset()
-        env.render()
+        # env.render()
         s_0 = env.reset()
         states = []
         rewards = []
         actions = []
         complete = False
-        while complete == False:
+        while complete is False:
             # Get actions and convert to numpy array
             action_probs = policy.predict(s_0).detach().numpy()
             action = np.random.choice(action_space, p=action_probs)
             s_1, r, complete, _ = env.step(action)
+            # env.render()
 
             states.append(s_0)
             rewards.append(r)

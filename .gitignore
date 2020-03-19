@@ -6,3 +6,4 @@ env
 .coverage
 .idea
 .ipynb_checkpoints
+/BreakoutNoFrameskip-v4/

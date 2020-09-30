@@ -1,158 +1,161 @@
 #!/usr/bin/env python
+from IMPORTS import *
+import wrappers
+import dqn_cnn_help
 
-# DQN for playing OpenAI CartPole. For full writeup, visit:
-# https://www.datahubbs.com/deep-q-learning-101/
+DEFAULT_ENV_NAME = "PongNoFrameskip-v4"
+MEAN_REWARD_BOUND = 19.5
 
-from dqn_cnn_help import *
+GAMMA = 0.99
+BATCH_SIZE = 32
+REPLAY_SIZE = 10000
+LEARNING_RATE = 1e-4
+SYNC_TARGET_FRAMES = 1000
+REPLAY_START_SIZE = 10000
 
-# visualise the game with learned policy
-# env = gym.make('BreakoutNoFrameskip-v4')
-# s_0 = env.reset()
-# state_buffer = deque(maxlen=4)
-# [state_buffer.append(np.zeros(s_0.size)) for i in range(4)]
-# for ep in range(100):
-#     s_0 = env.reset()
-#     complete = False
-#     while not complete:
-#         env.render()
-#         action = agent.network.get_greedy_action(s_0)
-#         s_1, r, complete, _ = env.step(action)
-#         s_0 = s_1
-#
-#     env.close()
-
-def main(argv):
-    args = parse_arguments()
-    if args.gpu is None or args.gpu == False:
-        args.gpu = 'cpu'
-    else:
-        args.gpu = 'cuda'
-
-    # Initialize environment
-    env = gym.make(args.env)
-
-    if args.seed is None:
-        args.seed = int(time.time())
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed(args.seed)
-
-    # Initialize DQNetwork
-    dqn = QNetwork(env=env,
-                   n_hidden_layers=args.hl,
-                   n_hidden_nodes=args.hn,
-                   learning_rate=args.lr,
-                   bias=args.bias,
-                   tau=args.tau,
-                   device=args.gpu,
-                   input_dim=(84, 84))
-    # Initialize DQNAgent
-    agent = DQNAgent(env, dqn,
-                     memory_size=args.memorySize,
-                     burn_in=args.burnIn,
-                     reward_threshold=args.threshold,
-                     path=args.path)
-    agent.save_parameters(args)
-    print(agent.network)
-    # Train agent
-    start_time = time.time()
-
-    agent.train(epsilon=args.epsStart,
-                gamma=args.gamma,
-                # max_episodes=args.maxEps,
-                max_episodes=2,
-                batch_size=args.batch,
-                update_freq=args.updateFreq,
-                network_sync_frequency=args.netSyncFreq)
-    end_time = time.time()
-    # Save results
-    agent.save_weights()
-    if args.plot:
-        agent.plot_rewards()
-
-    x = end_time - start_time
-    hours, remainder = divmod(x, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    print("Peak mean reward: {:.2f}".format(
-        max(agent.mean_training_rewards)))
-    print("Peak speed: {:.2f}".format(
-        max(agent.fps_buffer)))
-    print("Training Time: {:02}:{:02}:{:02}\n".format(
-        int(hours), int(minutes), int(seconds)))
+EPSILON_DECAY_LAST_FRAME = 10**5
+EPSILON_START = 1.0
+EPSILON_FINAL = 0.02
 
 
+Experience = collections.namedtuple('Experience', field_names=['state', 'action', 'reward', 'done', 'new_state'])
 
 
-def parse_arguments():
-    parser = ArgumentParser(description='Deep Q Network Argument Parser')
-    # Network parameters
-    parser.add_argument('--hl', type=int, default=1,
-                        help='An integer number that defines the number of hidden layers.')
-    parser.add_argument('--hn', type=int, default=512,
-                        help='An integer number that defines the number of hidden nodes.')
-    parser.add_argument('--lr', type=float, default=0.001,
-                        help='An integer number that defines the number of hidden layers.')
-    parser.add_argument('--bias', type=str2bool, default=True,
-                        help='Boolean to determine whether or not to use biases in network.')
-    parser.add_argument('--actFunc', type=str, default='relu',
-                        help='Set activation function.')
-    parser.add_argument('--gpu', type=str2bool, default=False,
-                        help='Boolean to enable GPU computation. Default set to False.')
-    parser.add_argument('--seed', type=int,
-                        help='Set random seed.')
-    # Environment
-    parser.add_argument('--env', dest='env', type=str, default='BreakoutNoFrameskip-v4')
+class ExperienceBuffer:
+    def __init__(self, capacity):
+        self.buffer = collections.deque(maxlen=capacity)
 
-    # Training parameters
-    parser.add_argument('--gamma', type=float, default=0.99,
-                        help='A value between 0 and 1 to discount future rewards.')
-    parser.add_argument('--maxEps', type=int,
-                        help='An integer number of episodes to train the agent on.')
-    parser.add_argument('--netSyncFreq', type=int, default=2000,
-                        help='An integer number that defines steps to update the target network.')
-    parser.add_argument('--updateFreq', type=int, default=1,
-                        help='Integer value that determines how many steps or episodes' +
-                             'must be completed before a backpropogation update is taken.')
-    parser.add_argument('--batch', type=int, default=32,
-                        help='An integer number that defines the batch size.')
-    parser.add_argument('--memorySize', type=int, default=50000,
-                        help='An integer number that defines the replay buffer size.')
-    parser.add_argument('--burnIn', type=int, default=32,
-                        help='Set the number of random burn-in transitions before training.')
-    parser.add_argument('--epsStart', type=float, default=0.05,
-                        help='Float value for the start of the epsilon decay.')
-    parser.add_argument('--epsEnd', type=float, default=0.01,
-                        help='Float value for the end of the epsilon decay.')
-    parser.add_argument('--epsStrategy', type=str, default='constant',
-                        help="Enter 'constant' to set epsilon to a constant value or 'decay'" +
-                             "to have the value decay over time. If 'decay', ensure proper" +
-                             "start and end values.")
-    parser.add_argument('--tau', type=int, default=1,
-                        help='Number of states to link together.')
-    parser.add_argument('--epsConstant', type=float, default=0.05,
-                        help='Float to be used in conjunction with a constant epsilon strategy.')
-    parser.add_argument('--window', type=int, default=100,
-                        help='Integer value to set the moving average window.')
-    parser.add_argument('--plot', type=str2bool, default=True,
-                        help='If true, plot training results.')
-    parser.add_argument('--path', type=str, default=None,
-                        help='Specify path to save results.')
-    parser.add_argument('--threshold', type=int, default=195,
-                        help='Set target reward threshold for the solved environment.')
+    def __len__(self):
+        return len(self.buffer)
+
+    def append(self, experience):
+        self.buffer.append(experience)
+
+    def sample(self, batch_size):
+        indices = np.random.choice(len(self.buffer), batch_size, replace=False)
+        states, actions, rewards, dones, next_states = zip(*[self.buffer[idx] for idx in indices])
+        return np.array(states), np.array(actions), np.array(rewards, dtype=np.float32), \
+               np.array(dones, dtype=np.uint8), np.array(next_states)
+
+
+class Agent:
+    def __init__(self, env, exp_buffer):
+        self.env = env
+        self.exp_buffer = exp_buffer
+        self._reset()
+
+    def _reset(self):
+        self.state = env.reset()
+        self.total_reward = 0.0
+
+    def play_step(self, net, epsilon=0.0, device="cpu"):
+        done_reward = None
+
+        if np.random.random() < epsilon:
+            action = env.action_space.sample()
+        else:
+            state_a = np.array([self.state], copy=False)
+            state_v = torch.tensor(state_a).to(device)
+            q_vals_v = net(state_v)
+            _, act_v = torch.max(q_vals_v, dim=1)
+            action = int(act_v.item())
+
+        # do step in the environment
+        new_state, reward, is_done, _ = self.env.step(action)
+        self.total_reward += reward
+
+        exp = Experience(self.state, action, reward, is_done, new_state)
+        self.exp_buffer.append(exp)
+        self.state = new_state
+        if is_done:
+            done_reward = self.total_reward
+            self._reset()
+        return done_reward
+
+
+def calc_loss(batch, net, tgt_net, device="cpu"):
+    states, actions, rewards, dones, next_states = batch
+
+    states_v = torch.tensor(states).to(device)
+    next_states_v = torch.tensor(next_states).to(device)
+    actions_v = torch.tensor(actions).to(device)
+    rewards_v = torch.tensor(rewards).to(device)
+    done_mask = torch.BoolTensor(dones).to(device)
+
+    state_action_values = net(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+    next_state_values = tgt_net(next_states_v).max(1)[0]
+    next_state_values[done_mask] = 0.0
+    next_state_values = next_state_values.detach()
+
+    expected_state_action_values = next_state_values * GAMMA + rewards_v
+    return nn.MSELoss()(state_action_values, expected_state_action_values)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cuda", default=False, action="store_true", help="Enable cuda")
+    parser.add_argument("--env", default=DEFAULT_ENV_NAME,
+                        help="Name of the environment, default=" + DEFAULT_ENV_NAME)
+    parser.add_argument("--reward", type=float, default=MEAN_REWARD_BOUND,
+                        help="Mean reward boundary for stop of training, default=%.2f" % MEAN_REWARD_BOUND)
     args = parser.parse_args()
+    device = torch.device("cuda" if args.cuda else "cpu")
 
-    return parser.parse_args()
+    env = wrappers.make_env(args.env)
 
+    net = dqn_cnn_help.DQN(env.observation_space.shape, env.action_space.n).to(device)
+    tgt_net = dqn_cnn_help.DQN(env.observation_space.shape, env.action_space.n).to(device)
+    writer = SummaryWriter(comment="-" + args.env)
+    print(net)
 
-def str2bool(argument):
-    if argument.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif argument.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        pass
-        # raise ArgumentTypeError('Boolean value expected.')
+    buffer = ExperienceBuffer(REPLAY_SIZE)
+    agent = Agent(env, buffer)
+    epsilon = EPSILON_START
 
+    optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)
+    total_rewards = []
+    frame_idx = 0
+    ts_frame = 0
+    ts = time.time()
+    best_mean_reward = None
 
-if __name__ == '__main__':
-    main(sys.argv)
+    while True:
+        frame_idx += 1
+        epsilon = max(EPSILON_FINAL, EPSILON_START - frame_idx / EPSILON_DECAY_LAST_FRAME)
+
+        reward = agent.play_step(net, epsilon, device=device)
+        if reward is not None:
+            total_rewards.append(reward)
+            speed = (frame_idx - ts_frame) / (time.time() - ts)
+            ts_frame = frame_idx
+            ts = time.time()
+            mean_reward = np.mean(total_rewards[-100:])
+            print("%d: done %d games, mean reward %.3f, eps %.2f, speed %.2f f/s" % (
+                frame_idx, len(total_rewards), mean_reward, epsilon,
+                speed
+            ))
+            writer.add_scalar("epsilon", epsilon, frame_idx)
+            writer.add_scalar("speed", speed, frame_idx)
+            writer.add_scalar("reward_100", mean_reward, frame_idx)
+            writer.add_scalar("reward", reward, frame_idx)
+            if best_mean_reward is None or best_mean_reward < mean_reward:
+                torch.save(net.state_dict(), args.env + "-best.dat")
+                if best_mean_reward is not None:
+                    print("Best mean reward updated %.3f -> %.3f, model saved" % (best_mean_reward, mean_reward))
+                best_mean_reward = mean_reward
+            if mean_reward > args.reward:
+                print("Solved in %d frames!" % frame_idx)
+                break
+
+        if len(buffer) < REPLAY_START_SIZE:
+            continue
+
+        if frame_idx % SYNC_TARGET_FRAMES == 0:
+            tgt_net.load_state_dict(net.state_dict())
+
+        optimizer.zero_grad()
+        batch = buffer.sample(BATCH_SIZE)
+        loss_t = calc_loss(batch, net, tgt_net, device=device)
+        loss_t.backward()
+        optimizer.step()
+    writer.close()
